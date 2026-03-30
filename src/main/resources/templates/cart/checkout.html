@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Thanh toán đơn hàng</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="container mt-5">
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-danger text-white">
+                <h4 class="mb-0">Thông tin giao hàng</h4>
+            </div>
+            <div class="card-body">
+                <p class="fs-5 text-end border-bottom pb-2">
+                    Tổng thanh toán: <strong class="text-danger" th:text="${#numbers.formatDecimal(totalPrice, 0, 'COMMA', 0, 'POINT')} + ' đ'"></strong>
+                </p>
+
+                <!-- Form nhập địa chỉ, gọi về method POST trong Controller -->
+                <form th:action="@{/cart/checkout}" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Họ và tên người nhận (*)</label>
+                        <input type="text" name="customerName" class="form-control" required placeholder="Nhập họ tên...">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Số điện thoại (*)</label>
+                        <input type="tel" name="phone" class="form-control" required placeholder="Nhập số điện thoại...">
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label">Địa chỉ nhận hàng đầy đủ (*)</label>
+                        <textarea name="address" class="form-control" rows="3" required placeholder="Ví dụ: Số 10, Ngõ 20, Quận X, TP Y..."></textarea>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a th:href="@{/cart}" class="btn btn-secondary">Quay lại giỏ hàng</a>
+                        <button type="submit" class="btn btn-success btn-lg">Xác nhận Đặt hàng</button>
+                    </div>
+                </form>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

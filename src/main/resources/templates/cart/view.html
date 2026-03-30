@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Giỏ hàng của bạn</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* CSS nhỏ để ẩn mũi tên tăng giảm mặc định của thẻ input type="number" cho đẹp */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+<body class="container mt-4">
+
+<h2>Giỏ hàng của bạn 🛒</h2>
+<a th:href="@{/products}" class="btn btn-secondary mb-3">⬅ Quay lại mua sắm</a>
+
+<div th:if="${cartItems.empty}">
+    <p class="alert alert-warning">Giỏ hàng đang trống!</p>
+</div>
+
+<div th:unless="${cartItems.empty}">
+    <table class="table table-bordered text-center align-middle">
+        <thead class="table-dark">
+        <tr>
+            <th>Tên sản phẩm</th>
+            <th>Giá</th>
+            <th>Số lượng</th>
+            <th>Thành tiền (Subtotal)</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="item : ${cartItems}">
+            <td th:text="${item.product.name}"></td>
+            <td th:text="${#numbers.formatDecimal(item.product.price, 0, 'COMMA', 0, 'POINT')} + ' đ'"></td>
+
+            <!-- Cột Số lượng: Nút Trừ (-) và Cộng (+) -->
+            <td>
+                <form th:action="@{/cart/update}" method="POST" class="d-flex justify-content-center align-items-center m-0">
+                    <!-- Truyền ID sản phẩm ngầm -->
+                    <input type="hidden" name="productId" th:value="${item.product.id}">
+
+                    <div class="input-group input-group-sm" style="width: 130px;">
+                        <!-- Nút Trừ (-) -->
+                        <button class="btn btn-outline-secondary fw-bold" type="button"
+                                onclick="this.parentNode.querySelector('input[type=number]').stepDown(); this.form.submit();">
+                            -
+                        </button>
+
+                        <!-- Ô nhập số lượng (Tự submit nếu người dùng gõ số vào rồi enter/click ra ngoài) -->
+                        <input type="number" name="quantity" th:value="${item.quantity}" min="1"
+                               class="form-control text-center fw-bold text-dark"
+                               onchange="this.form.submit()">
+
+                        <!-- Nút Cộng (+) -->
+                        <button class="btn btn-outline-secondary fw-bold" type="button"
+                                onclick="this.parentNode.querySelector('input[type=number]').stepUp(); this.form.submit();">
+                            +
+                        </button>
+                    </div>
+                </form>
+            </td>
+
+            <td th:text="${#numbers.formatDecimal(item.subTotal, 0, 'COMMA', 0, 'POINT')} + ' đ'" class="fw-bold"></td>
+        </tr>
+        </tbody>
+        <tfoot>
+        <tr>
+            <td colspan="3" class="text-end fw-bold fs-5">TỔNG TIỀN:</td>
+            <td th:text="${#numbers.formatDecimal(totalPrice, 0, 'COMMA', 0, 'POINT')} + ' đ'" class="text-danger fw-bold fs-5"></td>
+        </tr>
+        </tfoot>
+    </table>
+
+    <!-- Thay bằng link chuyển sang form nhập thông tin (nếu bạn đã làm trang checkout.html) -->
+    <div class="text-end mt-3">
+        <a th:href="@{/cart/checkout}" class="btn btn-danger btn-lg">Tiến hành Thanh toán</a>
+    </div>
+</div>
+
+</body>
+</html>

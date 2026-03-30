@@ -1,0 +1,783 @@
+﻿
+
+========================================
+=== File: SecurityConfig.java ===
+========================================
+
+package com.example.demo.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    @Bean
+    public BCryptPasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/login").permitAll()
+                        // YÃªu cáº§u quyá»n ADMIN cho trang thÃªm sáº£n pháº©m
+                        .requestMatchers("/product/add", "/products/create").hasRole("ADMIN")
+                        // Má»i ngÆ°á»i Ä‘Ã£ Ä‘Äƒng nháº­p Ä‘á»u xem Ä‘Æ°á»£c danh sÃ¡ch sáº£n pháº©m
+                        .requestMatchers("/products").authenticated()
+                        .anyRequest().authenticated()
+                )
+                .formLogin(form -> form.loginPage("/login").defaultSuccessUrl("/products", true))
+                .exceptionHandling(ex -> ex.accessDeniedPage("/403")) // Trang lá»—i khi user vÃ o khu vá»±c cá»§a admin
+                .logout(logout -> logout.permitAll());
+
+        return http.build();
+    }
+}
+
+
+========================================
+=== File: WebConfig.java ===
+========================================
+
+package com.example.demo.config;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+@Configuration
+public class WebConfig implements WebMvcConfigurer {
+
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+
+        String uploadPath = System.getProperty("user.dir") + "/uploads/";
+
+        registry.addResourceHandler("/uploads/**")
+                .addResourceLocations("file:" + uploadPath);
+    }
+}
+
+
+========================================
+=== File: HomeController.java ===
+========================================
+
+package com.example.demo.controller;
+
+import org.springframework.security.core.Authentication;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+
+@Controller
+public class HomeController {
+
+    // 1. Trang chá»§: Tá»± Ä‘á»™ng chuyá»ƒn hÆ°á»›ng vÃ o danh sÃ¡ch sáº£n pháº©m
+    @GetMapping("/")
+    public String index() {
+        return "redirect:/products";
+    }
+
+    // 2. Trang Ä‘Äƒng nháº­p tÃ¹y chá»‰nh (Custom Login)
+    @GetMapping("/login")
+    public String login() {
+        return "login"; // Tráº£ vá» file src/main/resources/templates/login.html
+    }
+
+    // 3. Trang thÃ´ng bÃ¡o lá»—i 403 (Access Denied)
+    // Khi User thÆ°á»ng cá»‘ tÃ¬nh vÃ o trang cá»§a ADMIN, Spring Security sáº½ Ä‘Ã¡ vá» Ä‘Ã¢y
+    @GetMapping("/403")
+    public String accessDenied() {
+        return "403"; // Tráº£ vá» file src/main/resources/templates/403.html
+    }
+}
+
+
+========================================
+=== File: ProductController.java ===
+========================================
+
+package com.example.demo.controller;
+
+import com.example.demo.model.Product;
+import com.example.demo.service.CategoryService;
+import com.example.demo.service.ProductService;
+
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+@Controller
+@RequestMapping("/products")
+@RequiredArgsConstructor
+public class ProductController {
+
+    private final ProductService productService;
+    private final CategoryService categoryService;
+
+    // LIST PRODUCT
+    @GetMapping
+    public String index(Model model) {
+        model.addAttribute("listProduct", productService.getAll());
+        return "product/products";
+    }
+
+    // FORM CREATE
+    @GetMapping("/create")
+    public String createForm(Model model) {
+
+        model.addAttribute("product", new Product());
+        model.addAttribute("categories", categoryService.getAll());
+
+        return "product/create";
+    }
+
+    // CREATE PRODUCT
+    @PostMapping("/create")
+    public String create(
+            @Valid @ModelAttribute Product product,
+            BindingResult result,
+            @RequestParam("imageFile") MultipartFile file,
+            @RequestParam("categoryId") int categoryId,
+            Model model) {
+
+        if (result.hasErrors()) {
+            model.addAttribute("categories", categoryService.getAll());
+            return "product/create";
+        }
+
+        product.setCategory(categoryService.get(categoryId));
+
+        productService.uploadImage(product, file);
+
+        productService.add(product);
+
+        return "redirect:/products";
+    }
+
+    // FORM EDIT
+    @GetMapping("/edit/{id}")
+    public String editForm(@PathVariable int id, Model model) {
+
+        model.addAttribute("product", productService.get(id));
+        model.addAttribute("categories", categoryService.getAll());
+
+        return "product/edit";
+    }
+
+    // UPDATE PRODUCT
+    @PostMapping("/edit")
+    public String edit(
+            @Valid @ModelAttribute Product product,
+            BindingResult result,
+            @RequestParam("imageFile") MultipartFile file,
+            @RequestParam("categoryId") int categoryId,
+            Model model) {
+
+        if (result.hasErrors()) {
+            model.addAttribute("categories", categoryService.getAll());
+            return "product/edit";
+        }
+
+        product.setCategory(categoryService.get(categoryId));
+
+        productService.uploadImage(product, file);
+
+        productService.update(product);
+
+        return "redirect:/products";
+    }
+
+    // DELETE
+    @GetMapping("/delete/{id}")
+    public String delete(@PathVariable int id) {
+
+        productService.delete(id);
+
+        return "redirect:/products";
+    }
+}
+
+
+========================================
+=== File: Account.java ===
+========================================
+
+package com.example.demo.model;
+
+import jakarta.persistence.*;
+import lombok.Data;
+
+import java.util.Set;
+
+@Entity
+@Data
+public class Account {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
+
+    @Column(name = "login_name")
+    private String loginName;
+
+    private String password;
+
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(name = "account_role",
+            joinColumns = @JoinColumn(name = "account_id"),
+            inverseJoinColumns = @JoinColumn(name = "role_id"))
+    private Set<Role> roles;
+}
+
+
+========================================
+=== File: Category.java ===
+========================================
+
+package com.example.demo.model;
+
+import jakarta.persistence.*;
+import lombok.Data;
+
+@Data
+@Entity
+public class Category {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
+
+    @Column(nullable = false, length = 255)
+    private String name;
+}
+
+
+========================================
+=== File: Product.java ===
+========================================
+
+package com.example.demo.model;
+
+import jakarta.persistence.*;
+import jakarta.validation.constraints.*;
+import lombok.*;
+
+@Getter
+@Setter
+
+@Data
+@Entity
+public class Product {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
+
+    @Column(nullable = false, length = 255)
+    private String name;
+
+    @Column(nullable = false)
+    private Long price;
+
+    @Column(length = 200)
+    private String image;
+
+    @ManyToOne
+    @JoinColumn(name = "category_id")
+    private Category category;
+}
+
+
+========================================
+=== File: Role.java ===
+========================================
+
+package com.example.demo.model;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id; // Nhá»› import Ä‘Ãºng cÃ¡i nÃ y
+import lombok.Data;
+
+@Entity
+@Data
+public class Role {
+
+    @Id // ÄÃ¡nh dáº¥u Ä‘Ã¢y lÃ  khÃ³a chÃ­nh
+    @GeneratedValue(strategy = GenerationType.IDENTITY) // Tá»± Ä‘á»™ng tÄƒng (Auto Increment)
+    private Integer id;
+
+    private String name;
+}
+
+
+========================================
+=== File: AccountRepository.java ===
+========================================
+
+package com.example.demo.repository;
+
+import com.example.demo.model.Account;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.Optional;
+
+public interface AccountRepository extends JpaRepository<Account, Integer> {
+    Optional<Account> findByLoginName(String loginName);
+}
+
+
+========================================
+=== File: CategoryRepository.java ===
+========================================
+
+package com.example.demo.repository;
+
+import com.example.demo.model.Category;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface CategoryRepository extends JpaRepository<Category, Integer> {
+}
+
+
+========================================
+=== File: ProductRepository.java ===
+========================================
+
+package com.example.demo.repository;
+
+import com.example.demo.model.Product;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface ProductRepository extends JpaRepository<Product, Integer> {
+}
+
+
+========================================
+=== File: CategoryService.java ===
+========================================
+
+package com.example.demo.service;
+
+import com.example.demo.model.Category;
+import com.example.demo.repository.CategoryRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class CategoryService {
+
+    private final CategoryRepository categoryRepository;
+
+    public List<Category> getAll() {
+        return categoryRepository.findAll();
+    }
+
+    public Category get(int id) {
+        return categoryRepository.findById(id).orElse(null);
+    }
+}
+
+
+========================================
+=== File: CustomUserDetailsService.java ===
+========================================
+
+package com.example.demo.service;
+
+import com.example.demo.model.Account;
+import com.example.demo.repository.AccountRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+
+import java.util.stream.Collectors;
+
+@Service
+public class CustomUserDetailsService implements UserDetailsService {
+    @Autowired
+    private AccountRepository accountRepository;
+
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        Account account = accountRepository.findByLoginName(username)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
+        var authorities = account.getRoles().stream()
+                .map(role -> new SimpleGrantedAuthority(role.getName()))
+                .collect(Collectors.toList());
+
+        return new org.springframework.security.core.userdetails.User(
+                account.getLoginName(), account.getPassword(), authorities);
+    }
+}
+
+
+========================================
+=== File: ProductService.java ===
+========================================
+
+package com.example.demo.service;
+
+import com.example.demo.model.Product;
+import com.example.demo.repository.ProductRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import lombok.RequiredArgsConstructor;
+
+import java.io.IOException;
+import java.nio.file.*;
+import java.util.List;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+public class ProductService {
+
+    private final ProductRepository productRepository;
+
+    // Láº¥y táº¥t cáº£ sáº£n pháº©m
+    public List<Product> getAll() {
+        return productRepository.findAll();
+    }
+
+    // Láº¥y sáº£n pháº©m theo id
+    public Product get(int id) {
+        return productRepository.findById(id).orElse(null);
+    }
+
+    // ThÃªm sáº£n pháº©m
+    public void add(Product product) {
+        productRepository.save(product);
+    }
+
+    // Update
+    public void update(Product product) {
+        productRepository.save(product);
+    }
+
+    // Delete
+    public void delete(int id) {
+        productRepository.deleteById(id);
+    }
+
+    // Upload image
+    public void uploadImage(Product product, MultipartFile file) {
+
+        if (!file.isEmpty()) {
+            try {
+
+                String uploadDir = System.getProperty("user.dir") + "/uploads/";
+                Path uploadPath = Paths.get(uploadDir);
+
+                if (!Files.exists(uploadPath)) {
+                    Files.createDirectories(uploadPath);
+                }
+
+                String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
+                Path filePath = uploadPath.resolve(fileName);
+
+                Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+
+                product.setImage(fileName);
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
+
+
+========================================
+=== File: Baitap4Application.java ===
+========================================
+
+package com.example.demo;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class Baitap4Application {
+
+	public static void main(String[] args) {
+		SpringApplication.run(Baitap4Application.class, args);
+	}
+
+}
+
+
+========================================
+=== File: 403.html ===
+========================================
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Access Denied</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="text-center mt-5">
+<h1 class="text-danger">403 - TRUY Cáº¬P Bá»Š Tá»ª CHá»I!</h1>
+<p>Báº¡n khÃ´ng cÃ³ quyá»n thá»±c hiá»‡n chá»©c nÄƒng nÃ y.</p>
+<a href="/products" class="btn btn-primary">Quay láº¡i danh sÃ¡ch</a>
+</body>
+</html>
+
+
+========================================
+=== File: login.html ===
+========================================
+
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>ÄÄƒng nháº­p há»‡ thá»‘ng</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .login-container { margin-top: 100px; }
+        .card { border: none; border-radius: 15px; }
+        .card-header { border-radius: 15px 15px 0 0 !important; }
+    </style>
+</head>
+<body>
+
+<div class="container login-container">
+    <div class="row justify-content-center">
+        <div class="col-md-4">
+            <div class="card shadow-lg">
+                <div class="card-header bg-primary text-white text-center py-3">
+                    <h4 class="mb-0">ÄÄ‚NG NHáº¬P</h4>
+                </div>
+                <div class="card-body p-4">
+
+                    <div th:if="${param.error}" class="alert alert-danger" role="alert">
+                        TÃ i khoáº£n hoáº·c máº­t kháº©u khÃ´ng chÃ­nh xÃ¡c!
+                    </div>
+
+                    <div th:if="${param.logout}" class="alert alert-success" role="alert">
+                        Báº¡n Ä‘Ã£ Ä‘Äƒng xuáº¥t thÃ nh cÃ´ng.
+                    </div>
+
+                    <form th:action="@{/login}" method="post">
+                        <div class="mb-3">
+                            <label for="username" class="form-label">TÃªn Ä‘Äƒng nháº­p</label>
+                            <input type="text" id="username" name="username" class="form-control"
+                                   placeholder="Nháº­p username" required autofocus>
+                        </div>
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Máº­t kháº©u</label>
+                            <input type="password" id="password" name="password" class="form-control"
+                                   placeholder="Nháº­p máº­t kháº©u" required>
+                        </div>
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" class="btn btn-primary">ÄÄƒng nháº­p</button>
+                        </div>
+                    </form>
+
+                </div>
+                <div class="card-footer text-center text-muted py-3">
+                    <small>&copy; 2026 - PhÃ¡t triá»ƒn á»©ng dá»¥ng Java</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+
+
+========================================
+=== File: application.properties ===
+========================================
+
+spring.application.name=baitap4
+
+# 1. C?U HÌNH SERVER (Quan tr?ng: ??i sang 8081 ?? không ??ng v?i c?ng 8080 c?a XAMPP)
+server.port=8081
+
+# 2. C?U HÌNH DATABASE
+spring.datasource.url=jdbc:mysql://localhost:3306/demoapp?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+spring.datasource.username=root
+spring.datasource.password=
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+# 3. C?U HÌNH JPA / HIBERNATE
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
+
+# 4. C?U HÌNH UPLOAD FILE (Gi? nguyên c?a b?n)
+spring.servlet.multipart.max-file-size=10MB
+spring.servlet.multipart.max-request-size=10MB
+
+
+========================================
+=== File: Baitap4ApplicationTests.java ===
+========================================
+
+package com.example.demo;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+
+@SpringBootTest
+class Baitap4ApplicationTests {
+
+	@Test
+	void contextLoads() {
+	}
+
+}
+
+
+========================================
+=== File: pom.xml ===
+========================================
+
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<version>4.0.3</version>
+		<relativePath/> <!-- lookup parent from repository -->
+	</parent>
+	<groupId>com.example</groupId>
+	<artifactId>demo</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name>baitap4</name>
+	<description>Demo project for Spring Boot</description>
+	<url/>
+	<licenses>
+		<license/>
+	</licenses>
+	<developers>
+		<developer/>
+	</developers>
+	<scm>
+		<connection/>
+		<developerConnection/>
+		<tag/>
+		<url/>
+	</scm>
+	<properties>
+		<java.version>17</java.version>
+	</properties>
+	<dependencies>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-thymeleaf</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.mysql</groupId>
+			<artifactId>mysql-connector-j</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webmvc</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-devtools</artifactId>
+			<scope>runtime</scope>
+			<optional>true</optional>
+		</dependency>
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<optional>true</optional>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-thymeleaf-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webmvc-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.thymeleaf.extras</groupId>
+			<artifactId>thymeleaf-extras-springsecurity6</artifactId>
+		</dependency>
+
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<annotationProcessorPaths>
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+						</path>
+					</annotationProcessorPaths>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+				<configuration>
+					<excludes>
+						<exclude>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+						</exclude>
+					</excludes>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>

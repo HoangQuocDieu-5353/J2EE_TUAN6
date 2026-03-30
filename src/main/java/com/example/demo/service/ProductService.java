@@ -2,6 +2,8 @@ package com.example.demo.service;
 
 import com.example.demo.model.Product;
 import com.example.demo.repository.ProductRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -21,6 +23,12 @@ public class ProductService {
     // Lấy tất cả sản phẩm
     public List<Product> getAll() {
         return productRepository.findAll();
+    }
+    public Page<Product> getProductsWithFilter(String keyword, Integer categoryId, Pageable pageable) {
+        if (keyword == null) {
+            keyword = "";
+        }
+        return productRepository.searchAndFilter(keyword, categoryId, pageable);
     }
 
     // Lấy sản phẩm theo id

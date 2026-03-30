@@ -12,6 +12,10 @@ import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 @Controller
 @RequestMapping("/products")
@@ -23,8 +27,28 @@ public class ProductController {
 
     // LIST PRODUCT
     @GetMapping
-    public String index(Model model) {
-        model.addAttribute("listProduct", productService.getAll());
+    public String index(
+            @RequestParam(name = "keyword", defaultValue = "") String keyword,
+            @RequestParam(name = "categoryId", required = false) Integer categoryId,
+            @RequestParam(name = "page", defaultValue = "1") int page,
+            @RequestParam(name = "sort", defaultValue = "asc") String sort,
+            Model model) {
+
+        // 1. Cấu hình sắp xếp (Câu 3)
+        Sort sortOrder = sort.equalsIgnoreCase("desc") ? Sort.by("price").descending() : Sort.by("price").ascending();
+
+        // 2. Cấu hình phân trang (Câu 2 - Mỗi trang 5 SP)
+        Pageable pageable = PageRequest.of(page - 1, 5, sortOrder);
+
+        // 3. Lấy dữ liệu (Câu 1, 4)
+        Page<Product> productPage = productService.getProductsWithFilter(keyword, categoryId, pageable);
+
+        model.addAttribute("productPage", productPage);
+        model.addAttribute("categories", categoryService.getAll()); // Đổ data cho Dropdown
+        model.addAttribute("keyword", keyword);
+        model.addAttribute("categoryId", categoryId);
+        model.addAttribute("sort", sort);
+
         return "product/products";
     }
 
